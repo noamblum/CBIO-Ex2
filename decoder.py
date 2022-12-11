@@ -81,6 +81,25 @@ def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: 
     return B_k[:,0]
 
 
+def posterior(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) -> str:
+    post = []
+    F_n = forward(seq, emission, p, q, p0, len(seq))
+    ll = np.logaddexp(F_n[0], F_n[1])
+    for k in range(1, len(seq) + 1):
+        F_k = forward(seq, emission, p, q, p0, k)
+        B_k = backward(seq, emission, p, q, p0, k)
+        log_posterior_for_each_state = (F_k + B_k) - ll # Because
+        post.append(np.argmax(log_posterior_for_each_state) + 1) # Convert 0 to 1 and 1 to 2
+    return ''.join(np.char.mod('%d', post))
+
+
+def print_posterior(seq_a: str, seq_b: str, chunk_size = 50) -> None:
+    a_chunks = [seq_a[i:i+chunk_size] for i in range(0, len(seq_a), chunk_size)]
+    b_chunks = [seq_b[i:i+chunk_size] for i in range(0, len(seq_b), chunk_size)]
+
+    for ac, bc in zip(a_chunks, b_chunks):
+        print(f"{ac}\n{bc}")
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--alg', help='Algorithm (e.g. viterbi)', required=True)
@@ -108,7 +127,7 @@ def main():
         print(ll)
 
     elif args.alg == 'posterior':
-        raise NotImplementedError
+        print_posterior(posterior(args.seq, initial_emission, args.p, args.q, args.p0), args.seq)
 
 
 if __name__ == '__main__':
