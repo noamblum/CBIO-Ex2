@@ -2,31 +2,47 @@ import argparse
 import numpy as np
 import pandas as pd
 
-def forward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) -> float:
-    table = np.zeros((emission.shape[0], len(seq))) # A row for each state
-    table[0,0] = np.log(p0 * emission.loc[0, seq[0]])
-    table[1,0] = np.log((1 - p0)  * emission.loc[1, seq[0]])
+def forward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: int) -> np.ndarray:
+    """Returns the k-th column of the forward table i.e.
+       [P(X_1,...X_k | S=1), P(X_1,...X_k | S=2)]
+       Note: by this definition, use np.logaddexp(forward(...)) with k=len(seq) to get the log likelihood
+
+    Args:
+        seq (str): The observations
+        emission (pd.DataFrame): The emission table
+        p (float): Prob to switch from state 1 to 2
+        q (float): Prob to switch from state 2 to 1
+        p0 (float): Prob to start in state 1
+        k (int): The index k
+
+    Returns:
+        np.ndarray: [P(X_1,...X_k | S=1), P(X_1,...X_k | S=2)]
+    """
+    F_k = np.zeros((emission.shape[0], 2)) # A row for each state
+    F_k[0,0] = np.log(p0 * emission.loc[0, seq[0]])
+    F_k[1,0] = np.log((1 - p0)  * emission.loc[1, seq[0]])
 
     lnp = np.log(p)
     lnq = np.log(q)
     ln1p = np.log(1 - p)
     ln1q = np.log(1 - q)
-    lne = emission.copy()
-    for c in lne.columns:
-        lne[c] = np.log(lne[c])
+    ln_emission = emission.copy()
+    for c in ln_emission.columns:
+        ln_emission[c] = np.log(ln_emission[c])
 
-    for i in range(1, len(seq)):
-        for j in range(table.shape[0]):
+    for i in range(1, k):
+        for j in range(F_k.shape[0]):
             tau = [ln1p, lnq] if j == 0 else [lnp, ln1q]
             tau = np.array(tau)
 
-            ln_vals_to_sum = table[:,i-1] + tau + lne.loc[j, seq[i]]
-            table[j,i] = ln_vals_to_sum[0] + np.log(1 + np.exp(ln_vals_to_sum[1] - ln_vals_to_sum[0]))
+            ln_vals_to_sum = F_k[:,0] + tau + ln_emission.loc[j, seq[i]]
+            F_k[j,1] = np.logaddexp(ln_vals_to_sum[0], ln_vals_to_sum[1])
+        F_k[:,0] = F_k[:,1]
     
-    return table[0, -1] + np.log(1 + np.exp(table[1, -1] - table[0, -1]))
+    return F_k[:,1]
+    
 
-
-def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) -> float:
+def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: int) -> float:
     seq = '^' + seq
     table = np.zeros((emission.shape[0], len(seq))) # A row for each state
     lnp = np.log(p)
@@ -67,10 +83,12 @@ def main():
         raise NotImplementedError
 
     elif args.alg == 'forward':
-        print(f'{forward(args.seq, initial_emission, args.p, args.q, args.p0):.2f}')
+        F_n = forward(args.seq, initial_emission, args.p, args.q, args.p0, len(args.seq))
+        ll = np.logaddexp(F_n[0], F_n[1])
+        print(ll)
 
     elif args.alg == 'backward':
-        print(f'{backward(args.seq, initial_emission, args.p, args.q, args.p0):.2f}')
+        print(f'{backward(args.seq, initial_emission, args.p, args.q, args.p0, 0):.2f}')
 
     elif args.alg == 'posterior':
         raise NotImplementedError
