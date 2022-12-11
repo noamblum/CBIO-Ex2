@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 
 def forward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: int) -> np.ndarray:
-    """Returns the k-th column of the forward table i.e.
-       [P(X_1,...X_k | S=1), P(X_1,...X_k | S=2)]
+    """Calculate the k-th column of the forward table i.e.
+       F_k = [P(X_1,...X_k | S=1), P(X_1,...X_k | S=2)]
        Note: by this definition, use np.logaddexp(forward(...)) with k=len(seq) to get the log likelihood
 
     Args:
@@ -42,9 +42,23 @@ def forward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: i
     return F_k[:,1]
     
 
-def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: int) -> float:
+def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: int) -> np.ndarray:
+    """Calculate the k-th element of the backward table i.e.
+    B_k = [P(X_k+1,...X_n | S=1), P(X_k+1,...X_n | S=2)]
+
+    Args:
+        seq (str): The observations
+        emission (pd.DataFrame): The emission table
+        p (float): Prob to switch from state 1 to 2
+        q (float): Prob to switch from state 2 to 1
+        p0 (float): Prob to start in state 1
+        k (int): The index k
+
+    Returns:
+        np.ndarray: [P(X_k+1,...X_n | S=1), P(X_k+1,...X_n | S=2)]
+    """
     seq = '^' + seq
-    table = np.zeros((emission.shape[0], len(seq))) # A row for each state
+    B_k = np.zeros((emission.shape[0], 2)) # A row for each state
     lnp = np.log(p)
     lnq = np.log(q)
     ln1p = np.log(1 - p)
@@ -53,17 +67,18 @@ def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: 
     for c in lne.columns:
         lne[c] = np.log(lne[c])
 
-    for i in range(len(seq) - 2, -1, -1):
-        for j in range(table.shape[0]):
+    for i in range(len(seq) - 2, k - 1, -1):
+        for j in range(B_k.shape[0]):
             if i > 0:
                 tau = [ln1p, lnp] if j == 0 else [lnq, ln1q]
             else:
                 tau = [np.log(p0), np.log(1 - p0)]
             tau = np.array(tau)
 
-            ln_vals_to_sum = table[:,i+1] + tau + lne[seq[i + 1]].to_numpy()
-            table[j,i] = np.logaddexp(ln_vals_to_sum[0], ln_vals_to_sum[1])
-    return table[0, 0]
+            ln_vals_to_sum = B_k[:,1] + tau + lne[seq[i + 1]].to_numpy()
+            B_k[j,0] = np.logaddexp(ln_vals_to_sum[0], ln_vals_to_sum[1])
+        B_k[:,1] = B_k[:,0]
+    return B_k[:,0]
 
 
 def main():
@@ -88,7 +103,9 @@ def main():
         print(ll)
 
     elif args.alg == 'backward':
-        print(f'{backward(args.seq, initial_emission, args.p, args.q, args.p0, 0):.2f}')
+        B_0 = backward(args.seq, initial_emission, args.p, args.q, args.p0, 0)
+        ll = B_0[0]
+        print(ll)
 
     elif args.alg == 'posterior':
         raise NotImplementedError
