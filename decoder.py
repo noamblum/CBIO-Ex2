@@ -93,7 +93,36 @@ def posterior(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) ->
     return ''.join(np.char.mod('%d', post))
 
 
-def print_posterior(seq_a: str, seq_b: str, chunk_size = 50) -> None:
+def viterbi(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) -> str:
+    seq = '^' + seq
+    lnp = np.log(p)
+    lnq = np.log(q)
+    ln1p = np.log(1 - p)
+    ln1q = np.log(1 - q)
+    lne = emission.copy()
+    for c in lne.columns:
+        lne[c] = np.log(lne[c])
+
+    V = np.zeros((2, len(seq)))
+    Ptr = np.zeros((2, len(seq)), dtype=int)
+    for i in range(1, len(seq)):
+        for k in range(V.shape[0]):
+            if i > 0:
+                tau = [ln1p, lnq] if k == 0 else [lnp, ln1q]
+            else:
+                tau = [np.log(p0), np.log(1 - p0)]
+            tau = np.array(tau)
+            V[k,i] = lne.loc[k,seq[i]] + np.max(V[:,i-1] + tau)
+            Ptr[k,i] = np.argmax(V[:,i-1] + tau)
+    
+    states = [np.argmax(V[:,-1])]
+    for i in range(len(seq) - 1, 1, -1):
+        states.append(Ptr[states[-1], i])
+    return ''.join(str(s + 1) for s in states[::-1])
+
+
+
+def print_hidden_states(seq_a: str, seq_b: str, chunk_size = 50) -> None:
     a_chunks = [seq_a[i:i+chunk_size] for i in range(0, len(seq_a), chunk_size)]
     b_chunks = [seq_b[i:i+chunk_size] for i in range(0, len(seq_b), chunk_size)]
 
@@ -114,7 +143,7 @@ def main():
     initial_emission = pd.read_table(args.initial_emission)
 
     if args.alg == 'viterbi':
-        raise NotImplementedError
+        print_hidden_states(viterbi(args.seq, initial_emission, args.p, args.q, args.p0), args.seq)
 
     elif args.alg == 'forward':
         F_n = forward(args.seq, initial_emission, args.p, args.q, args.p0, len(args.seq))
@@ -127,7 +156,7 @@ def main():
         print(ll)
 
     elif args.alg == 'posterior':
-        print_posterior(posterior(args.seq, initial_emission, args.p, args.q, args.p0), args.seq)
+        print_hidden_states(posterior(args.seq, initial_emission, args.p, args.q, args.p0), args.seq)
 
 
 if __name__ == '__main__':

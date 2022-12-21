@@ -48,7 +48,7 @@ def test_single_alg(mf, epath, alg):
     if is_output_correct(ret, alg):
         print('\033[32m{}\033[00m'.format('SUCCESS'))
     else:
-        print('\033[31m{}\033[00m'.format('FAIL'))
+        print('\033[31m{}\033[00m'.format(f'FAIL - Expected {[states, seq]} Got {ret}'))
 
 
 def main(args):
