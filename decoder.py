@@ -19,16 +19,21 @@ def forward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: i
         np.ndarray: [P(X_1,...X_k | S=1), P(X_1,...X_k | S=2)]
     """
     F_k = np.zeros((emission.shape[0], 2)) # A row for each state
-    F_k[0,0] = np.log(p0 * emission.loc[0, seq[0]])
-    F_k[1,0] = np.log((1 - p0)  * emission.loc[1, seq[0]])
 
-    lnp = np.log(p)
-    lnq = np.log(q)
-    ln1p = np.log(1 - p)
-    ln1q = np.log(1 - q)
+    lnp = np.log(p) if p > 0 else -np.inf
+    lnq = np.log(q) if q > 0 else -np.inf
+    ln1p = np.log(1 - p) if p < 1 else -np.inf
+    ln1q = np.log(1 - q) if q < 1 else -np.inf
+    lnp0 = np.log(p0) if p0 > 0 else -np.inf
+    ln1p0 = np.log(1 - p0) if p0 < 1 else -np.inf
+
+
     ln_emission = emission.copy()
     for c in ln_emission.columns:
         ln_emission[c] = np.log(ln_emission[c])
+    
+    F_k[0,0] = lnp0 + ln_emission.loc[0, seq[0]]
+    F_k[1,0] = ln1p0  + ln_emission.loc[1, seq[0]]
 
     for i in range(1, k):
         for j in range(F_k.shape[0]):
@@ -59,10 +64,12 @@ def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: 
     """
     seq = '^' + seq
     B_k = np.zeros((emission.shape[0], 2)) # A row for each state
-    lnp = np.log(p)
-    lnq = np.log(q)
-    ln1p = np.log(1 - p)
-    ln1q = np.log(1 - q)
+    lnp = np.log(p) if p > 0 else -np.inf
+    lnq = np.log(q) if q > 0 else -np.inf
+    ln1p = np.log(1 - p) if p < 1 else -np.inf
+    ln1q = np.log(1 - q) if q < 1 else -np.inf
+    lnp0 = np.log(p0) if p0 > 0 else -np.inf
+    ln1p0 = np.log(1 - p0) if p0 < 1 else -np.inf
     lne = emission.copy()
     for c in lne.columns:
         lne[c] = np.log(lne[c])
@@ -72,7 +79,7 @@ def backward(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float, k: 
             if i > 0:
                 tau = [ln1p, lnp] if j == 0 else [lnq, ln1q]
             else:
-                tau = [np.log(p0), np.log(1 - p0)]
+                tau = [lnp0, ln1p0]
             tau = np.array(tau)
 
             ln_vals_to_sum = B_k[:,1] + tau + lne[seq[i + 1]].to_numpy()
@@ -95,10 +102,12 @@ def posterior(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) ->
 
 def viterbi(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) -> str:
     seq = '^' + seq
-    lnp = np.log(p)
-    lnq = np.log(q)
-    ln1p = np.log(1 - p)
-    ln1q = np.log(1 - q)
+    lnp = np.log(p) if p > 0 else -np.inf
+    lnq = np.log(q) if q > 0 else -np.inf
+    ln1p = np.log(1 - p) if p < 1 else -np.inf
+    ln1q = np.log(1 - q) if q < 1 else -np.inf
+    lnp0 = np.log(p0) if p0 > 0 else -np.inf
+    ln1p0 = np.log(1 - p0) if p0 < 1 else -np.inf
     lne = emission.copy()
     for c in lne.columns:
         lne[c] = np.log(lne[c])
@@ -110,7 +119,7 @@ def viterbi(seq: str, emission: pd.DataFrame, p:float, q: float, p0: float) -> s
             if i > 0:
                 tau = [ln1p, lnq] if k == 0 else [lnp, ln1q]
             else:
-                tau = [np.log(p0), np.log(1 - p0)]
+                tau = [lnp0, ln1p0]
             tau = np.array(tau)
             V[k,i] = lne.loc[k,seq[i]] + np.max(V[:,i-1] + tau)
             Ptr[k,i] = np.argmax(V[:,i-1] + tau)
@@ -148,12 +157,12 @@ def main():
     elif args.alg == 'forward':
         F_n = forward(args.seq, initial_emission, args.p, args.q, args.p0, len(args.seq))
         ll = np.logaddexp(F_n[0], F_n[1])
-        print(ll)
+        print(f"{ll:.2f}")
 
     elif args.alg == 'backward':
         B_0 = backward(args.seq, initial_emission, args.p, args.q, args.p0, 0)
         ll = B_0[0]
-        print(ll)
+        print(f"{ll:.2f}")
 
     elif args.alg == 'posterior':
         print_hidden_states(posterior(args.seq, initial_emission, args.p, args.q, args.p0), args.seq)
